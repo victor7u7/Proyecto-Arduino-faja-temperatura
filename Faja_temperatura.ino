@@ -17,13 +17,20 @@
 #include <DallasTemperature.h>  //LIBRERIAS SENSOR DE TEMPERATURA
 // ======================= CONFIGURACIÓN DE PINES =======================
 
-const int ativaVibracionIN1 = 27; // Rele de vibracion
+
+const int ativaVibracionIN1 = 25; // Pin que controlará la vibración Entrada IN1 
+const int ativaVibracionIN2 = 27; // Pin que controlará la vibración Entrada IN2 con el PWM regula la potencia de vibracion
+int pwmIntensidadVibracion = 200;   // Valor inicial del PWM (0–255)
 
 const int ativaTempIN2 = 26;    // Relé de temperatura
 
 #define pinDS18B20 4      // DATA del sensor al pin 4 del ESP32 (CABLE COLOR AMARILLO)
 OneWire oneWire(pinDS18B20);
 DallasTemperature sensors(&oneWire);
+
+// PWM ESP32 para controlar la intensidad de vibracion de motor
+
+
 
 // ======================= VARIABLES DE CRONÓMETRO =======================
 // Se usan para contar el tiempo que la vibración está activa
@@ -289,15 +296,25 @@ void setup() {
  
   Serial.begin(115200);
 
+
  pinMode(ativaVibracionIN1, OUTPUT);
+ pinMode(ativaVibracionIN2, OUTPUT);
  pinMode(ativaTempIN2, OUTPUT);
 
-  
-  
-  digitalWrite(ativaVibracionIN1, HIGH);
-  digitalWrite(ativaTempIN2, HIGH);
+ digitalWrite(ativaTempIN2, HIGH);
   
   sensors.begin(); // Inicializa el DS18B20
+//PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM
+//PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM
+//PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM
+//PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM 
+
+  //Resolución	Rango	Ejemplo 8 bits	0–255 10 bits 0–1023 (no mover)
+  analogWriteResolution(8);      // Rango 0–255
+
+  analogWriteFrequency(5000);    // 5 kHz (silencioso y estable) o poner 2000
+  analogWrite(ativaVibracionIN2, pwmIntensidadVibracion);   // vibración inicial
+ 
   
 
 
@@ -343,9 +360,11 @@ void loop() {
 
 // modulo Rele activado se realiza con low Activacion de vibracion
  if (vibOn) {
-  digitalWrite(ativaVibracionIN1, LOW);   // Activa 
+  digitalWrite(ativaVibracionIN1, HIGH);
+  analogWrite(ativaVibracionIN2, pwmIntensidadVibracion);    // PWM 0–255
 } else {
-  digitalWrite(ativaVibracionIN1, HIGH);  // Desactiva
+  analogWrite(ativaVibracionIN2, 0);
+  digitalWrite(ativaVibracionIN1, LOW);    // apaga dirección
 }
   //  ******  *****  *****  *****   *****
   //  ******  *****  *** ***  ***  *******   
