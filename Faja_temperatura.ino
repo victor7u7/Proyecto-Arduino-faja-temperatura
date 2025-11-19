@@ -18,13 +18,20 @@
 // ======================= CONFIGURACIÓN DE PINES =======================
 
 
-const int ativaVibracionIN1 = 25; // Pin que controlará la vibración Entrada IN1 
-const int ativaVibracionIN2 = 27; // Pin que controlará la vibración Entrada IN2 con el PWM regula la potencia de vibracion
-int pwmIntensidadVibracion = 200;   // Valor inicial del PWM (0–255)
+const int ativaVibracionIN1 = 13;
+const int ativaVibracionIN2 = 14;
 
-const int ativaTempIN2 = 26;    // Relé de temperatura
+const int ativaVibracionIN3 = 27;  // segundo motor
+const int ativaVibracionIN4 = 25;  // segundo motor
 
-#define pinDS18B20 4      // DATA del sensor al pin 4 del ESP32 (CABLE COLOR AMARILLO)
+int pwmIntensidadVibracion = 50;   // Valor inicial del PWM (0–255) inicia en 0 para hacer una rampa en pwm
+int pwmActual=0; //para incrementar poco a poco
+
+bool lastTempOn = false;  // guarda el estado anterior
+
+const int ativaTempIN2 = 23;    // Relé de temperatura
+
+#define pinDS18B20 15      // DATA del sensor al pin 4 del ESP32 (CABLE COLOR AMARILLO)
 OneWire oneWire(pinDS18B20);
 DallasTemperature sensors(&oneWire);
 
@@ -298,7 +305,10 @@ void setup() {
 
 
  pinMode(ativaVibracionIN1, OUTPUT);
- pinMode(ativaVibracionIN2, OUTPUT);
+pinMode(ativaVibracionIN2, OUTPUT);
+pinMode(ativaVibracionIN3, OUTPUT);  // NUEVO
+pinMode(ativaVibracionIN4, OUTPUT);  // NUEVO
+
  pinMode(ativaTempIN2, OUTPUT);
 
  digitalWrite(ativaTempIN2, HIGH);
@@ -309,12 +319,12 @@ void setup() {
 //PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM
 //PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM PWM   PWM   PWM   PWM 
 
-  //Resolución	Rango	Ejemplo 8 bits	0–255 10 bits 0–1023 (no mover)
-  analogWriteResolution(8);      // Rango 0–255
+  
+  
+  // Vibración inicial en ambos pines
+  analogWrite(ativaVibracionIN1, pwmIntensidadVibracion);
+  analogWrite(ativaVibracionIN2, pwmIntensidadVibracion);
 
-  analogWriteFrequency(5000);    // 5 kHz (silencioso y estable) o poner 2000
-  analogWrite(ativaVibracionIN2, pwmIntensidadVibracion);   // vibración inicial
- 
   
 
 
@@ -356,16 +366,39 @@ void loop() {
   //  ***   ***       ***      ********
   //  ***   ***       ***      ***   ***
   //   *******    ***********  ***   ***
-  //    ****      ***********  ********
+  //    *****     ***********  ********
 
 // modulo Rele activado se realiza con low Activacion de vibracion
- if (vibOn) {
-  digitalWrite(ativaVibracionIN1, HIGH);
-  analogWrite(ativaVibracionIN2, pwmIntensidadVibracion);    // PWM 0–255
-} else {
-  analogWrite(ativaVibracionIN2, 0);
-  digitalWrite(ativaVibracionIN1, LOW);    // apaga dirección
+ static unsigned long lastRamp = 0;
+const unsigned long rampInterval = 200;
+
+if (millis() - lastRamp >= rampInterval) {
+    lastRamp = millis();
+
+    if (vibOn) {
+        if (pwmActual < pwmIntensidadVibracion) {
+            pwmActual += 5;
+            if (pwmActual > pwmIntensidadVibracion)
+                pwmActual = pwmIntensidadVibracion;
+        }
+    } else {
+        if (pwmActual > 0) {
+            pwmActual -= 5;
+            if (pwmActual < 0)
+                pwmActual = 0;
+        }
+    }
 }
+
+// APLICAR PWM A TODAS LAS SALIDAS
+
+analogWrite(ativaVibracionIN1, pwmActual);
+analogWrite(ativaVibracionIN2,  LOW);
+
+// SEGUNDO MOTOR / SEGUNDO PAR
+analogWrite(ativaVibracionIN3, pwmActual);
+analogWrite(ativaVibracionIN4, LOW);
+
   //  ******  *****  *****  *****   *****
   //  ******  *****  *** ***  ***  *******   
   //    **    **     ***  *   ***  **   **
@@ -376,20 +409,20 @@ void loop() {
   //    **    ****   ***      ***  **
 
 // modulo Rele de 2 activado se realiza con low activacion de temperatura
-  if (tempOn) {
-  digitalWrite(ativaTempIN2, LOW);        // Activa (LOW trigger)
-} else {
-  digitalWrite(ativaTempIN2, HIGH);       // Desactiva
-  //  ******  *****  *****  *****   *****
-  //  ******  *****  *** ***  ***  *******   
-  //    **    **     ***  *   ***  **   **
-  //    **    ****   ***      ***  *******  
-  //    **    ****   ***      ***  **
-  //    **    **     ***      ***  ** 
-  //    **    ****   ***      ***  ** 
-  //    **    ****   ***      ***  **
+// SOLO entra aquí cuando hay un cambio REAL en tempOn
+if (tempOn != lastTempOn) {
 
+    if (tempOn) {
+        digitalWrite(ativaTempIN2, LOW);  // activa
+        Serial.println("TEMP: ON (Entró al IF y se mantiene ON)");
+    } else {
+        digitalWrite(ativaTempIN2, HIGH); // desactiva
+        Serial.println("TEMP: OFF (Entró al ELSE y se mantiene OFF)");
+    }
+
+    lastTempOn = tempOn;  // actualiza el estado anterior
 }
+
 
   // Cronómetro real: mide cuánto tiempo ha estado activa la vibración
   if (vibOn) { //entra luego luego ya que la vibracion al iniciar siempre prende
