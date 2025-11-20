@@ -24,8 +24,9 @@ const int ativaVibracionIN2 = 14;
 const int ativaVibracionIN3 = 27;  // segundo motor
 const int ativaVibracionIN4 = 25;  // segundo motor
 
-int pwmIntensidadVibracion = 50;   // Valor inicial del PWM (0–255) inicia en 0 para hacer una rampa en pwm
-int pwmActual=0; //para incrementar poco a poco
+int pwmIntensidadVibracion = 50;   // valor maximo de vibracion de pwm
+int pwmActual=0; //inicializamos en 0
+
 
 bool lastTempOn = false;  // guarda el estado anterior
 
@@ -35,7 +36,11 @@ const int ativaTempIN2 = 23;    // Relé de temperatura
 OneWire oneWire(pinDS18B20);
 DallasTemperature sensors(&oneWire);
 
-// PWM ESP32 para controlar la intensidad de vibracion de motor
+// ==================== CONTROL DE TEMPERATURA CON HISTERESIS ====================
+const float tempMin = 21.0;  // debajo de esto ENCIENDE
+const float tempMax = 23.0;  // arriba de esto APAGA
+
+static bool controlState = false;  // estado interno del relé cuando tempOn = true
 
 
 
@@ -393,11 +398,11 @@ if (millis() - lastRamp >= rampInterval) {
 // APLICAR PWM A TODAS LAS SALIDAS
 
 analogWrite(ativaVibracionIN1, pwmActual);
-analogWrite(ativaVibracionIN2,  LOW);
+analogWrite(ativaVibracionIN2,  0);
 
 // SEGUNDO MOTOR / SEGUNDO PAR
 analogWrite(ativaVibracionIN3, pwmActual);
-analogWrite(ativaVibracionIN4, LOW);
+analogWrite(ativaVibracionIN4, 0);
 
   //  ******  *****  *****  *****   *****
   //  ******  *****  *** ***  ***  *******   
@@ -410,17 +415,22 @@ analogWrite(ativaVibracionIN4, LOW);
 
 // modulo Rele de 2 activado se realiza con low activacion de temperatura
 // SOLO entra aquí cuando hay un cambio REAL en tempOn
-if (tempOn != lastTempOn) {
-
-    if (tempOn) {
-        digitalWrite(ativaTempIN2, LOW);  // activa
-        Serial.println("TEMP: ON (Entró al IF y se mantiene ON)");
-    } else {
-        digitalWrite(ativaTempIN2, HIGH); // desactiva
-        Serial.println("TEMP: OFF (Entró al ELSE y se mantiene OFF)");
+if (!tempOn) {
+    // Si está apagado desde la web → apagado total, sin control
+    digitalWrite(ativaTempIN2, HIGH);  // relé OFF
+    controlState = false;
+} 
+else {
+    // Control automático con histéresis
+    if (temperatura <= tempMin) {
+        controlState = true;              // ENCENDER
+    } 
+    else if (temperatura >= tempMax) {
+        controlState = false;             // APAGAR
     }
 
-    lastTempOn = tempOn;  // actualiza el estado anterior
+    // Aplicar estado al relé
+    digitalWrite(ativaTempIN2, controlState ? LOW : HIGH);
 }
 
 
